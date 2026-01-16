@@ -1,20 +1,15 @@
-# credit-risk-pyspark-aws
-End-to-end credit risk default prediction pipeline using PySpark and AWS.
-
-# Credit Risk Default Prediction (PySpark + AWS)
+# Credit Risk Early Warning System (PySpark + AWS)
 
 ## Business Problem
-This project is looking to predict probability of default for consumer loans to support credit approval and portfolio risk monitoring in a banking context.
-The work in this project is done to showcase my skills and knowledge of using Python, PySpark, AWS and Machine Learning to apply in an industry setting
-
-## Architecture
-I am using raw loan data stored in Amazon S3 then processed using PySpark for feature
-engineering. Further more I am training machine learning models that estimate default risk.
+Build an Early Warning System (EWS) that flags borrowers whose credit risk is
+deteriorating, using historical behavior to predict adverse outcomes over a
+future horizon (e.g., next 3 months). This supports portfolio monitoring and
+risk prioritization.
 
 ## Tech Stack
-- Python, PySpark
-- AWS S3
-- Spark MLlib
+- Python, PySpark (feature engineering + ML)
+- AWS S3 (data lake)
+- Spark MLlib (baseline models)
 
 ## Project Status
-This project is currently under active development.
+In progress — implementing time-window feature engineering and baseline models.
