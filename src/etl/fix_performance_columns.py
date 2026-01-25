@@ -1,6 +1,6 @@
-import pandas as pd
 import argparse
 from pyspark.sql import SparkSession, functions as F
+
 
 def build_spark(app_name: str, use_s3_packages: bool) -> SparkSession:
     builder = SparkSession.builder.appName(app_name)
@@ -21,19 +21,27 @@ def build_spark(app_name: str, use_s3_packages: bool) -> SparkSession:
         )
     return builder.getOrCreate()
 
+
 def main(column_specs):
     parser = argparse.ArgumentParser(
-        description="Curate Freddie Mac parquet by selecting/renaming columns and partitioning by year/month derived from yyyymm."
+        description="Curate Freddie Mac performance parquet by selecting/renaming columns and partitioning by year/month derived from yyyymm."
     )
-    parser.add_argument("--input", required=True, help="Input cleaned parquet path, e.g. s3a://bucket/cleaned/.../performance/")
-    parser.add_argument("--output", required=True, help="Output curated parquet path, e.g. s3a://bucket/curated/.../performance/")
-    parser.add_argument("--use_s3_packages", action="store_true", help="Enable if you get s3a filesystem/jar errors locally.")
+    parser.add_argument("--input", required=True, help="Input cleaned parquet path, e.g. s3a://.../cleaned/.../svcg/v1/")
+    parser.add_argument("--output", required=True, help="Output curated parquet path, e.g. s3a://.../curated/.../svcg/v1/")
+    parser.add_argument("--use_s3_packages", action="store_true", help="Enable if reading s3a:// fails locally.")
     args = parser.parse_args()
 
     spark = build_spark("freddie-mac-curate-performance", use_s3_packages=args.use_s3_packages)
 
-    df = spark.read.parquet(args.input)
+    input_path = args.input.rstrip("/") + "/*.txt"
 
+    df = (spark.read
+          .option("sep", "|")
+          .option("header", "false")
+          .option("mode", "PERMISSIVE")
+          .csv(input_path))
+
+    # Build select expressions
     select_exprs = []
     for raw_col, new_name, cast_type in column_specs:
         col_expr = F.col(raw_col)
@@ -43,14 +51,18 @@ def main(column_specs):
 
     df_curated = df.select(*select_exprs)
 
-    # ✅ Ensure year/month exist even if they weren't in the input parquet
-    # Requires df_curated to have a column named "yyyymm"
+    # yyyymm MUST be string for rlike; keep it string here
+    df_curated = df_curated.filter(F.col("yyyymm").rlike(r"^\d{6}$"))
+
+    # Derive year/month from yyyymm
     df_curated = (
         df_curated
-        .filter(F.col("yyyymm").rlike(r"^\d{6}$"))
         .withColumn("year", F.substring(F.col("yyyymm"), 1, 4).cast("int"))
         .withColumn("month", F.substring(F.col("yyyymm"), 5, 2).cast("int"))
     )
+
+    # Optional: cast yyyymm to int AFTER deriving year/month
+    df_curated = df_curated.withColumn("yyyymm", F.col("yyyymm").cast("int"))
 
     (
         df_curated.write.mode("overwrite")
@@ -63,41 +75,20 @@ def main(column_specs):
 
 
 if __name__ == "__main__":
-    file_df = pd.read_excel("/Users/aaryanthusoo/Desktop/Personal/Credit-Risk-Analysis/data/file_layout.xlsx", skiprows=1)
-
-    """
-    Required Columns:
-    20  - Loan Sequence Number
-     1  - Credit Score
-    10  - Original Debt-to-Income (DTI) Ratio
-    12  - Original Loan-to-Value (DTI) Ratio
-    11  - Original UPB
-    13  - Original Interest Rate
-    22  - Original Loan Term
-     8  - Occupancy Status
-    23  - Number of Borrowers
-    17  - Property State
-    """
-
-    # Needed columns
+    # Corrected & typed performance column specs
+    # Field position N -> _c(N-1)
     column_specs = [
-        ("_c19", "loan_id", None),
-        ("_c0", "credit_score", "int"),
-        ("_c9", "dti", "int"),
-        ("_c11", "ltv", "int"),
-        ("_c10", "orig_upb", "double"),
-        ("_c12", "orig_rate", "double"),
-        ("_c21", "orig_term", "int"),
-        ("_c7", "occupancy", None),
-        ("_c22", "num_borrowers", "int"),
-        ("_c16", "property_state", None),
-        ("yyyymm", "yyyymm", None),]
+        ("_c0",  "loan_id",            "string"),   # Loan Sequence Number
+        ("_c1",  "yyyymm",             "string"),   # Monthly Reporting Period (YYYYMM) - keep string for regex
+        ("_c2",  "current_upb",        "double"),   # Current Actual UPB
+        ("_c3",  "delinquency_status", "string"),   # Keep string (can include non-numeric codes)
+        ("_c4",  "loan_age",           "int"),
+        ("_c5",  "remaining_term",     "int"),
+        ("_c7",  "modification_flag",  "string"),
+        ("_c8",  "zero_balance_code",  "string"),
+        ("_c9",  "zero_balance_date",  "string"),   # often YYYYMM; you can cast later if you want
+        ("_c10", "current_int_rate",   "double"),   # Field position 11 -> _c10
+        ("_c25", "eltv",               "int"),      # Field position 26 -> _c25
+    ]
 
     main(column_specs)
-
-"""
-python3 src/etl/curate_origination.py \
-  --input s3a://credit-risk-ews-data/cleaned/freddie_mac/performance/v1/ \
-  --output s3a://credit-risk-ews-data/cleaned/freddie_mac/origination/v1/ \
-  --use_s3_packages
-"""
