@@ -1,1 +1,13 @@
+aws s3 cp data/raw/freddie_mac/untouched/svcg/sample_svcg_2018.txt s3://credit-risk-ews-data/raw/freddie_mac/svcg/
+aws s3 cp data/raw/freddie_mac/untouched/svcg/sample_svcg_2019.txt s3://credit-risk-ews-data/raw/freddie_mac/svcg/
 
+python3 src/etl/fix_origination_columns.py \
+  --input s3a://credit-risk-ews-data/raw/freddie_mac/orig/ \
+  --output s3a://credit-risk-ews-data/cleaned/freddie_mac/orig/v1/ \
+  --use_s3_packages
+
+
+python3 src/etl/fix_performance_columns.py \
+  --input s3a://credit-risk-ews-data/raw/freddie_mac/svcg/ \
+  --output s3a://credit-risk-ews-data/curated/freddie_mac/svcg/v1/ \
+  --use_s3_packages
