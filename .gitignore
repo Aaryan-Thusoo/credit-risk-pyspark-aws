@@ -1,6 +1,10 @@
 data/
+.DS_Store
 *.zip
 *.txt
+!requirements.txt
 .env
 __pycache__/
 .ipynb_checkpoints/
+outputs/
+work/

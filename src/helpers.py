@@ -1,6 +1,11 @@
-from pyspark.sql import SparkSession
+def build_spark(app_name: str, use_s3_packages: bool):
+    try:
+        from pyspark.sql import SparkSession
+    except ModuleNotFoundError as exc:
+        raise ModuleNotFoundError(
+            "PySpark is not installed. Install dependencies with `pip install -r requirements.txt`."
+        ) from exc
 
-def build_spark(app_name: str, use_s3_packages: bool) -> SparkSession:
     builder = SparkSession.builder.appName(app_name)
     if use_s3_packages:
         builder = (

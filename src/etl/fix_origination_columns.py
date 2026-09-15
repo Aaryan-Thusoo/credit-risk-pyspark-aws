@@ -1,34 +1,21 @@
-import pandas as pd
 import argparse
-from pyspark.sql import SparkSession, functions as F
+import sys
+from pathlib import Path
 
-def build_spark(app_name: str, use_s3_packages: bool) -> SparkSession:
-    builder = SparkSession.builder.appName(app_name)
-    if use_s3_packages:
-        builder = (
-            builder.config(
-                "spark.jars.packages",
-                ",".join([
-                    "org.apache.hadoop:hadoop-aws:3.3.4",
-                    "com.amazonaws:aws-java-sdk-bundle:1.12.262",
-                ]),
-            )
-            .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
-            .config(
-                "spark.hadoop.fs.s3a.aws.credentials.provider",
-                "com.amazonaws.auth.DefaultAWSCredentialsProviderChain",
-            )
-        )
-    return builder.getOrCreate()
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+
+from helpers import build_spark
 
 def main(column_specs):
     parser = argparse.ArgumentParser(
-        description="Curate Freddie Mac parquet by selecting/renaming columns and partitioning by year/month derived from yyyymm."
+        description="Curate Freddie Mac origination text files by selecting and renaming required columns."
     )
-    parser.add_argument("--input", required=True, help="Input cleaned parquet path, e.g. s3a://bucket/cleaned/.../performance/")
-    parser.add_argument("--output", required=True, help="Output curated parquet path, e.g. s3a://bucket/curated/.../performance/")
+    parser.add_argument("--input", required=True, help="Input text file path or prefix, e.g. s3a://bucket/raw/.../origination/")
+    parser.add_argument("--output", required=True, help="Output parquet path, e.g. s3a://bucket/cleaned/.../origination/v1/")
     parser.add_argument("--use_s3_packages", action="store_true", help="Enable if you get s3a filesystem/jar errors locally.")
     args = parser.parse_args()
+
+    from pyspark.sql import functions as F
 
     spark = build_spark("freddie-mac-name-origination-cols", use_s3_packages=args.use_s3_packages)
 
@@ -60,8 +47,6 @@ def main(column_specs):
     spark.stop()
 
 if __name__ == "__main__":
-    file_df = pd.read_excel("/Users/aaryanthusoo/Desktop/Personal/Credit-Risk-Analysis/data/file_layout.xlsx", skiprows=1)
-
     """
     Required Columns:
     20  - Loan Sequence Number
@@ -94,7 +79,7 @@ if __name__ == "__main__":
 #("yyyymm", "yyyymm", None),
 """
 python3 src/etl/curate_origination.py \
-  --input s3a://credit-risk-ews-data/cleaned/freddie_mac/performance/v1/ \
+  --input s3a://credit-risk-ews-data/raw/freddie_mac/origination/ \
   --output s3a://credit-risk-ews-data/cleaned/freddie_mac/origination/v1/ \
   --use_s3_packages
 """

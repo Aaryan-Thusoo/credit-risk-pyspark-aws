@@ -1,35 +1,22 @@
 import argparse
-from pyspark.sql import SparkSession, functions as F
+import sys
+from pathlib import Path
 
+sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-def build_spark(app_name: str, use_s3_packages: bool) -> SparkSession:
-    builder = SparkSession.builder.appName(app_name)
-    if use_s3_packages:
-        builder = (
-            builder.config(
-                "spark.jars.packages",
-                ",".join([
-                    "org.apache.hadoop:hadoop-aws:3.3.4",
-                    "com.amazonaws:aws-java-sdk-bundle:1.12.262",
-                ]),
-            )
-            .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
-            .config(
-                "spark.hadoop.fs.s3a.aws.credentials.provider",
-                "com.amazonaws.auth.DefaultAWSCredentialsProviderChain",
-            )
-        )
-    return builder.getOrCreate()
+from helpers import build_spark
 
 
 def main(column_specs):
     parser = argparse.ArgumentParser(
-        description="Curate Freddie Mac performance parquet by selecting/renaming columns and partitioning by year/month derived from yyyymm."
+        description="Curate Freddie Mac performance text files by selecting/renaming columns and partitioning by year/month derived from yyyymm."
     )
-    parser.add_argument("--input", required=True, help="Input cleaned parquet path, e.g. s3a://.../cleaned/.../svcg/v1/")
-    parser.add_argument("--output", required=True, help="Output curated parquet path, e.g. s3a://.../curated/.../svcg/v1/")
+    parser.add_argument("--input", required=True, help="Input text file path or prefix, e.g. s3a://bucket/raw/.../performance/")
+    parser.add_argument("--output", required=True, help="Output parquet path, e.g. s3a://bucket/cleaned/.../performance/v1/")
     parser.add_argument("--use_s3_packages", action="store_true", help="Enable if reading s3a:// fails locally.")
     args = parser.parse_args()
+
+    from pyspark.sql import functions as F
 
     spark = build_spark("freddie-mac-curate-performance", use_s3_packages=args.use_s3_packages)
 
